@@ -1,0 +1,77 @@
+{
+  "name": "l1demo_gui_loader",
+  "productName": "L1Demo GUI Loader",
+  "version": "1.0.0",
+  "description": "A GUI for loading programs onto the LayerOne Demo Board",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "electron-forge start",
+    "package": "electron-forge package",
+    "make": "electron-forge make",
+    "publish": "electron-forge publish",
+    "lint": "eslint --cache --color --ext .jsx,.js src"
+  },
+  "keywords": [],
+  "author": "David Khudaverdyan",
+  "license": "WTFPL-2.0",
+  "repository": "https://github.com/thedeltaflyer/L1Demo-GUI-Loader",
+  "config": {
+    "forge": {
+      "make_targets": {
+        "win32": [
+          "squirrel"
+        ],
+        "darwin": [
+          "zip"
+        ],
+        "linux": [
+          "deb",
+          "rpm"
+        ]
+      },
+      "electronPackagerConfig": {
+        "packageManager": "npm",
+        "ignore": [
+          ".idea"
+        ]
+      },
+      "electronWinstallerConfig": {
+        "name": "l1demo_gui_loader"
+      },
+      "electronInstallerDebian": {},
+      "electronInstallerRedhat": {},
+      "github_repository": {
+        "owner": "thedeltaflyer",
+        "name": "L1Demo-GUI-Loader"
+      },
+      "windowsStoreConfig": {
+        "packageName": "",
+        "name": "l1demo_gui_loader"
+      }
+    }
+  },
+  "dependencies": {
+    "electron-compile": "^6.4.2",
+    "electron-devtools-installer": "^2.2.3",
+    "electron-squirrel-startup": "^1.0.0",
+    "react": "^15.6.2",
+    "react-dom": "^15.6.2",
+    "prop-types": "^15.6.0",
+    "react-hot-loader": "^3.1.3",
+    "material-ui": "^0.20.0",
+    "lodash": "^4.17.5"
+  },
+  "devDependencies": {
+    "babel-plugin-transform-async-to-generator": "^6.24.1",
+    "babel-plugin-transform-es2015-classes": "^6.24.1",
+    "babel-preset-env": "^1.6.1",
+    "babel-preset-react": "^6.24.1",
+    "electron-forge": "^5.1.1",
+    "electron-prebuilt-compile": "1.8.2",
+    "eslint": "^3.19.0",
+    "eslint-config-airbnb": "^15.1.0",
+    "eslint-plugin-import": "^2.8.0",
+    "eslint-plugin-jsx-a11y": "^5.1.1",
+    "eslint-plugin-react": "^7.6.1"
+  }
+}
