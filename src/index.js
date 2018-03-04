@@ -1,8 +1,12 @@
-import { app, BrowserWindow, ipcMain } from 'electron';
+import { app, BrowserWindow, ipcMain, shell, Menu } from 'electron';
 import installExtension, { REACT_DEVELOPER_TOOLS } from 'electron-devtools-installer';
 import { enableLiveReload } from 'electron-compile';
+import { fixPathForAsarUnpack } from 'electron-util';
 import { readdirSync } from 'fs';
 import _ from 'lodash';
+import path from 'path';
+import fixPath from 'fix-path';
+import which from 'which';
 import { spawn } from 'child_process';
 
 
@@ -18,10 +22,26 @@ let lastExit = 0;
 let errText = '';
 let hasFailed = false;
 let currentProcess;
+let lastOptions = {
+  filepath: '',
+  tty: null,
+  device: '',
+  rate: '',
+  args: ['--writef', '-o'],
+};
 
 const isDevMode = process.execPath.match(/[\\/]electron/);
 
 if (isDevMode) enableLiveReload({ strategy: 'react-hmr' });
+
+fixPath();
+
+const handleRedirect = (e, url) => {
+  if (url !== mainWindow.webContents.getURL()) {
+    e.preventDefault();
+    shell.openExternal(url);
+  }
+};
 
 const createWindow = async () => {
   // Create the browser window.
@@ -62,6 +82,101 @@ const createWindow = async () => {
     // when you should delete the corresponding element.
     mainWindow = null;
   });
+
+  mainWindow.webContents.on('will-navigate', handleRedirect);
+  mainWindow.webContents.on('new-window', handleRedirect);
+
+  const template = [
+    {
+      label: 'Edit',
+      submenu: [
+        { role: 'undo' },
+        { role: 'redo' },
+        { type: 'separator' },
+        { role: 'cut' },
+        { role: 'copy' },
+        { role: 'paste' },
+        { role: 'pasteandmatchstyle' },
+        { role: 'delete' },
+        { role: 'selectall' },
+      ],
+    },
+    {
+      label: 'View',
+      submenu: [
+        { type: 'separator' },
+        { role: 'resetzoom' },
+        { role: 'zoomin' },
+        { role: 'zoomout' },
+        { type: 'separator' },
+        { role: 'togglefullscreen' },
+      ],
+    },
+    {
+      role: 'window',
+      submenu: [
+        { role: 'minimize' },
+        { role: 'close' },
+      ],
+    },
+    {
+      role: 'help',
+      submenu: [
+        {
+          label: 'Learn More',
+          click: () => { shell.openExternal('http://l1demo.org'); },
+        },
+      ],
+    },
+  ];
+
+  if (isDevMode) {
+    template[1].submenu.unshift(
+      { role: 'reload' },
+      { role: 'forcereload' },
+      { role: 'toggledevtools' },
+    );
+  }
+
+  if (process.platform === 'darwin') {
+    template.unshift({
+      label: app.getName(),
+      submenu: [
+        { role: 'about' },
+        { type: 'separator' },
+        { role: 'services', submenu: [] },
+        { type: 'separator' },
+        { role: 'hide' },
+        { role: 'hideothers' },
+        { role: 'unhide' },
+        { type: 'separator' },
+        { role: 'quit' },
+      ],
+    });
+
+    // Edit menu
+    template[1].submenu.push(
+      { type: 'separator' },
+      {
+        label: 'Speech',
+        submenu: [
+          { role: 'startspeaking' },
+          { role: 'stopspeaking' },
+        ],
+      },
+    );
+
+    // Window menu
+    template[3].submenu = [
+      { role: 'close' },
+      { role: 'minimize' },
+      { role: 'zoom' },
+      { type: 'separator' },
+      { role: 'front' },
+    ];
+  }
+
+  Menu.setApplicationMenu(Menu.buildFromTemplate(template));
 };
 
 // This method will be called when Electron has finished
@@ -90,11 +205,21 @@ app.on('activate', () => {
 // In this file you can include the rest of your app's specific main process
 // code. You can also put them in separate files and import them here.
 
+const getAllTtys = () => {
+  const ttyFound = [];
+  readdirSync('/dev').forEach((ttyPath) => {
+    if (ttyPath.indexOf('tty') >= 0) {
+      ttyFound.push(path.join('/dev', ttyPath));
+    }
+  });
+  return ttyFound;
+};
+
 const getUsbTtys = () => {
   const ttyFound = [];
-  readdirSync('/dev').forEach((path) => {
-    if (path.indexOf('tty') >= 0 && path.indexOf('usb') >= 0) {
-      ttyFound.push(path);
+  readdirSync('/dev').forEach((ttyPath) => {
+    if (ttyPath.indexOf('tty') >= 0 && ttyPath.indexOf('usb') >= 0) {
+      ttyFound.push(ttyPath);
     }
   });
   return ttyFound;
@@ -105,18 +230,25 @@ const setPageLock = (locked) => {
   mainWindow.webContents.send('locked-page', locked);
 };
 
+const checkForMono = () => {
+  try {
+    which.sync('mono');
+  } catch (error) {
+    setPageLock(true);
+    currentPage = 'requires_mono';
+    mainWindow.webContents.send('change-page', 'requires_mono');
+  }
+};
+
 const basicModeStdOut = (data) => {
   // console.log('stdout: <' + data +'> ');
   stdData += data;
   if (!hasFailed) {
     if (data.includes('Initializing the ds30 Loader engine...')) {
-      // console.log('Initialized!');
       mainWindow.webContents.send('basic-set-step', 1);
     } else if (data.includes('Initiating write...')) {
-      // console.log('Initiating!');
       mainWindow.webContents.send('basic-set-step', 2);
     } else if (data.includes('Writing flash')) {
-      // console.log('Writing!');
       mainWindow.webContents.send('basic-set-step', 3);
     } else if (data.includes('Failed to open port')) {
       errText = data.toString().trim();
@@ -143,9 +275,15 @@ const basicModeDone = (code) => {
       mainWindow.webContents.send('alert-show-message', `Got the following error message: ${errText}`);
       errText = '';
     } else {
-      mainWindow.webContents.send('alert-show-message', 'Something went wrong!');
+      mainWindow.webContents.send('alert-show-message', `Something went wrong! ${code}`);
     }
   }
+  app.dock.bounce('informational');
+};
+
+const basicModeError = (error) => {
+  setPageLock(false);
+  mainWindow.webContents.send('alert-show-message', `Encountered an Error! ${error}`);
 };
 
 const advancedModeStdOut = (data) => {
@@ -165,32 +303,61 @@ const advancedModeDone = (code) => {
 };
 
 
-const runProgram = (filepath, tty, device = 'pic24fj256da206', rate = '115200') => {
-  const command = `mono ./bin/ds30LoaderConsole.exe -f="${filepath}" -d="${device}" -k="${tty}" -r="${rate}" --writef -o`;
-  // let p = process.spawn('mono', [
-  //   '../bin/ds30LoaderConsole.exe',
-  //   `-f=${filepath}`,
-  //   `-d=${device}`,
-  //   `-k=${tty}`,
-  //   `-r=${rate}`,
-  //   '--writef',
-  //   '-o',
-  // ], { shell: true });
+const runProgram = (filepath, tty, device = 'pic24fj256da206', rate = '115200', args = ['--writef', '-o']) => {
+  const exePath = fixPathForAsarUnpack(path.resolve(__dirname, '../bin/ds30LoaderConsole.exe'));
+
   setPageLock(true);
   hasFailed = false;
   stdData = '';
   errData = '';
-  const p = spawn(command, { shell: true });
-  // const p = spawn('pwd');
+  lastOptions = {
+    filepath,
+    tty,
+    device,
+    rate,
+    args,
+  };
 
-  p.stdout.on('data', basicModeStdOut);
-  p.stderr.on('data', basicModeStdErr);
-  p.on('close', basicModeDone);
+  const mono = which.sync('mono');
+  const command = [
+    `"${exePath}"`,
+    `-f="${filepath}"`,
+    `-d=${device}`,
+    `-k="${tty}"`,
+    `-r=${rate}`,
+  ];
+  command.push(...args);
+  const p = spawn(mono, command, { shell: true });
+  if (_.isEqual(currentPage, 'basic')) {
+    p.stdout.on('data', basicModeStdOut);
+    p.stderr.on('data', basicModeStdErr);
+    p.on('close', basicModeDone);
+    p.on('error', basicModeError);
+  } else {
+    mainWindow.webContents.send('advanced-new-start');
+    p.stdout.on('data', advancedModeStdOut);
+    p.stderr.on('data', advancedModeStdErr);
+    p.on('close', advancedModeDone);
+    p.on('error', basicModeError);
+  }
   currentProcess = p;
 };
 
+ipcMain.on('request-mainprocess-get-last-options', (event) => {
+  event.sender.send('mainprocess-response-last-options', lastOptions);
+});
+
+ipcMain.on('mainprocess-set-last-options', (event, arg) => {
+  Object.assign(lastOptions, arg);
+  // console.log(lastOptions);
+});
+
 ipcMain.on('request-mainprocess-get-tty', (event) => {
   event.sender.send('mainprocess-response-get-tty', getUsbTtys());
+});
+
+ipcMain.on('request-mainprocess-get-tty-adv', (event) => {
+  event.sender.send('mainprocess-response-get-tty-adv', getAllTtys());
 });
 
 ipcMain.on('request-alert-show-message', (event, arg) => {
@@ -215,9 +382,22 @@ ipcMain.on('request-change-page', (event, arg) => {
 ipcMain.on('request-mainprocess-program', (event, arg) => {
   if (!arg.advanced) {
     runProgram(arg.filepath, arg.tty);
+  } else {
+    runProgram(arg.filepath, arg.tty, arg.device, arg.rate, arg.flags);
   }
+});
+
+ipcMain.on('requst-mainprocess-kill-program', () => {
+  if (currentProcess) {
+    currentProcess.kill();
+  }
+  setPageLock(false);
 });
 
 ipcMain.on('request-last-runtime', (event) => {
   event.sender.send('last-runtime', { stdout: stdData, stderr: errData, exit: lastExit });
+});
+
+ipcMain.on('request-mainprocess-check-requirements', () => {
+  checkForMono();
 });

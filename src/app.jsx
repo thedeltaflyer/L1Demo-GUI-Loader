@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { Component } from 'react';
 import MuiThemeProvider from 'material-ui/styles/MuiThemeProvider';
 import { ipcRenderer } from 'electron';
 import _ from 'lodash';
@@ -7,10 +7,11 @@ import Footer from './components/Footer';
 import Basic from './pages/Basic';
 import Advanced from './pages/Advanced';
 import About from './pages/About';
+import RequiresMono from './pages/RequiresMono';
 import AlertDialog from './components/AlertDialog';
 
 
-export default class App extends React.Component {
+export default class App extends Component {
   constructor(props) {
     super(props);
     this.state = {
@@ -31,6 +32,7 @@ export default class App extends React.Component {
     ipcRenderer.on('alert-show-message', this.doOnShowAlert);
     ipcRenderer.on('change-page', this.doOnChangePage);
     ipcRenderer.on('locked-page', this.doOnPageLock);
+    ipcRenderer.send('request-mainprocess-check-requirements');
   }
 
   componentWillUnmount() {
@@ -77,6 +79,7 @@ export default class App extends React.Component {
     }
 
     let page = null;
+    let showFooter = true;
     switch (this.state.currentPage) {
       case 'basic':
         page = <Basic locked={this.state.pageLocked} />;
@@ -87,15 +90,21 @@ export default class App extends React.Component {
       case 'about':
         page = <About />;
         break;
+      case 'requires_mono':
+        page = <RequiresMono />;
+        showFooter = false;
+        break;
       default:
         page = null;
     }
 
     return (<MuiThemeProvider><div>
       {alertDia}
-      <Header />
-      {page}
-      <Footer currentPage={this.state.currentPage} />
+      <div style={{ overflow: 'auto', paddingBottom: '64px' }}>
+        <Header />
+        {page}
+      </div>
+      {showFooter ? <Footer currentPage={this.state.currentPage} /> : null}
     </div>
     </MuiThemeProvider>);
   }

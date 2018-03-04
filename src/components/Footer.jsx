@@ -28,7 +28,7 @@ const getIndexFor = (mode) => {
 
 const goToPage = (name) => {
   ipcRenderer.send('request-change-page', name);
-}
+};
 
 class Footer extends Component {
   constructor(props) {
@@ -46,7 +46,7 @@ class Footer extends Component {
 
   render() {
     return (
-      <Paper zDepth={1} style={{ position: 'absolute', bottom: 0, left: 0, right: 0 }}>
+      <Paper zDepth={1} style={{ position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 9999 }}>
         <BottomNavigation selectedIndex={this.state.selectedIndex}>
           <BottomNavigationItem
             label="Basic"

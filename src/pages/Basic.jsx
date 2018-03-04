@@ -35,7 +35,7 @@ class Basic extends Component {
   }
 
   doOnReturnCode(event, arg) {
-    console.log(arg);
+    // console.log(arg);
     if (_.isEqual(arg, 0)) {
       this.setState({
         currentStep: 4,
