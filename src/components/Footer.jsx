@@ -46,7 +46,7 @@ class Footer extends Component {
 
   render() {
     return (
-      <Paper zDepth={1} style={{ position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 9999 }}>
+      <Paper zDepth={1} style={{ position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 999 }}>
         <BottomNavigation selectedIndex={this.state.selectedIndex}>
           <BottomNavigationItem
             label="Basic"
