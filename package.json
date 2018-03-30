@@ -1,7 +1,7 @@
 {
   "name": "l1demo_gui_loader",
   "productName": "L1Demo GUI Loader",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "A GUI for loading programs onto the LayerOne Demo Board",
   "main": "src/index.js",
   "scripts": {
@@ -11,7 +11,12 @@
     "publish": "electron-forge publish",
     "lint": "eslint --cache --color --ext .jsx,.js src"
   },
-  "keywords": ["layerone", "demoscene", "demo", "uploader"],
+  "keywords": [
+    "layerone",
+    "demoscene",
+    "demo",
+    "uploader"
+  ],
   "author": "David Khudaverdyan",
   "license": "WTFPL-2.0",
   "repository": "https://github.com/thedeltaflyer/L1Demo-GUI-Loader",
