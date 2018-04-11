@@ -7,7 +7,7 @@ import _ from 'lodash';
 import path from 'path';
 import fixPath from 'fix-path';
 import which from 'which';
-import { spawn } from 'child_process';
+import { spawn, spawnSync } from 'child_process';
 
 
 // Keep a global reference of the window object, if you don't, the window will
@@ -30,6 +30,9 @@ let lastOptions = {
   args: ['--writef', '-o'],
 };
 
+const isWin = process.platform === 'win32';
+const isMac = process.platform === 'darwin';
+const isLin = process.platform === 'linux';
 const isDevMode = process.execPath.match(/[\\/]electron/);
 
 if (isDevMode) enableLiveReload({ strategy: 'react-hmr' });
@@ -47,13 +50,19 @@ const createWindow = async () => {
   // Create the browser window.
   mainWindow = new BrowserWindow({
     width: 800,
-    height: 600,
+    height: isWin ? 620 : 600,
     resizable: false,
     show: false,
+    icon: `${__dirname}/../static/icons/l1demo.png`,  // Linux needs the icon set in the window.
   });
 
   const splash = new BrowserWindow({
-    width: 800, height: 600, transparent: true, frame: false, alwaysOnTop: true,
+    width: 800,
+    height: 600,
+    transparent: true,
+    frame: false,
+    alwaysOnTop: true,
+    icon: `${__dirname}/../static/icons/l1demo.png`,  // Linux needs the icon set in the window.
   });
   splash.loadURL(`file://${__dirname}/splash.html`);
 
@@ -205,23 +214,67 @@ app.on('activate', () => {
 // In this file you can include the rest of your app's specific main process
 // code. You can also put them in separate files and import them here.
 
-const getAllTtys = () => {
-  const ttyFound = [];
-  readdirSync('/dev').forEach((ttyPath) => {
-    if (ttyPath.indexOf('tty') >= 0) {
-      ttyFound.push(path.join('/dev', ttyPath));
+const getWinComs = () => {
+  const devices = [];
+  const output = spawnSync('wmic', ['path', 'Win32_SerialPort'], { shell: true });
+  const lines = output.stdout.toString().split('\n');
+  let startIndex = 0;
+  let stopIndex = 0;
+  lines.forEach((line) => {
+    if (line.startsWith('Availability')) {
+      startIndex = line.indexOf('Caption');
+      stopIndex = line.indexOf('ConfigManagerErrorCode');
+    } else if (_.includes(line, '(COM')) {
+      devices.push(`${line.substring(startIndex, stopIndex).trim()}`);
     }
   });
+  return devices;
+};
+
+const getWinUsbComs = () => {
+  const devices = [];
+  const output = spawnSync('wmic', ['path', 'Win32_SerialPort'], { shell: true });
+  const lines = output.stdout.toString().split('\n');
+  lines.forEach((line) => {
+    if (_.includes(line, 'USB Serial Port')) {
+      const items = line.split(/(\s+)/).filter(e => e.trim().length > 0);
+      let comFound = false;
+      items.forEach((section) => {
+        if (!comFound && _.includes(section, '(COM')) {
+          devices.push(`USB Serial Port ${section}`);
+          comFound = true;
+        }
+      });
+    }
+  });
+  return devices;
+};
+
+const getAllTtys = () => {
+  const ttyFound = [];
+  if (isWin) {
+    Array.prototype.push.apply(ttyFound, getWinComs());
+  } else {
+    readdirSync('/dev').forEach((ttyPath) => {
+      if (ttyPath.indexOf('tty') >= 0) {
+        ttyFound.push(path.join('/dev', ttyPath));
+      }
+    });
+  }
   return ttyFound;
 };
 
 const getUsbTtys = () => {
   const ttyFound = [];
-  readdirSync('/dev').forEach((ttyPath) => {
-    if (ttyPath.indexOf('tty') >= 0 && ttyPath.indexOf('usb') >= 0) {
-      ttyFound.push(ttyPath);
-    }
-  });
+  if (isWin) {
+    Array.prototype.push.apply(ttyFound, getWinUsbComs());
+  } else {
+    readdirSync('/dev').forEach((ttyPath) => {
+      if (ttyPath.indexOf('tty') >= 0 && ttyPath.indexOf('usb') >= 0) {
+        ttyFound.push(ttyPath);
+      }
+    });
+  }
   return ttyFound;
 };
 
@@ -278,7 +331,9 @@ const basicModeDone = (code) => {
       mainWindow.webContents.send('alert-show-message', `Something went wrong! ${code}`);
     }
   }
-  app.dock.bounce('informational');
+  if (isMac) {
+    app.dock.bounce('informational');
+  }
 };
 
 const basicModeError = (error) => {
@@ -306,28 +361,43 @@ const advancedModeDone = (code) => {
 const runProgram = (filepath, tty, device = 'pic24fj256da206', rate = '115200', args = ['--writef', '-o']) => {
   const exePath = fixPathForAsarUnpack(path.resolve(__dirname, '../bin/ds30LoaderConsole.exe'));
 
+  let realTTY;
+  if ((isMac || isLin) && !tty.startsWith('/')) {
+    realTTY = `/dev/${tty}`;
+  } else if (isWin && _.includes(tty, 'COM')) {
+    const comNum = tty.split('COM')[1].split(')')[0];
+    realTTY = `COM${comNum}`;
+  } else {
+    realTTY = tty;
+  }
+
   setPageLock(true);
   hasFailed = false;
   stdData = '';
   errData = '';
   lastOptions = {
     filepath,
-    tty,
+    tty: isWin ? tty : realTTY,
     device,
     rate,
     args,
   };
 
-  const mono = which.sync('mono');
   const command = [
-    `"${exePath}"`,
     `-f="${filepath}"`,
     `-d=${device}`,
-    `-k="${tty}"`,
+    `-k="${realTTY}"`,
     `-r=${rate}`,
   ];
   command.push(...args);
-  const p = spawn(mono, command, { shell: true });
+  let p;
+  if (isWin) {
+    p = spawn(`"${exePath}"`, command, { shell: true });
+  } else {
+    const mono = which.sync('mono');
+    command.unshift(`"${exePath}"`);
+    p = spawn(mono, command, { shell: true });
+  }
   if (_.isEqual(currentPage, 'basic')) {
     p.stdout.on('data', basicModeStdOut);
     p.stderr.on('data', basicModeStdErr);
@@ -348,7 +418,11 @@ ipcMain.on('request-mainprocess-get-last-options', (event) => {
 });
 
 ipcMain.on('mainprocess-set-last-options', (event, arg) => {
-  Object.assign(lastOptions, arg);
+  const options = arg;
+  if (arg.tty && (isMac || isLin)) {
+    options.tty = `/dev/${arg.tty}`;
+  }
+  Object.assign(lastOptions, options);
   // console.log(lastOptions);
 });
 
@@ -368,7 +442,7 @@ ipcMain.on('request-change-page', (event, arg) => {
   if (_.isEqual(arg, 'advanced')) {
     mainWindow.setResizable(true);
   } else if (!isDevMode) {
-    mainWindow.setSize(800, 600, true);
+    mainWindow.setSize(800, isWin ? 620 : 600, true);
     mainWindow.setResizable(false);
   }
   if (lockPage) {
@@ -389,7 +463,12 @@ ipcMain.on('request-mainprocess-program', (event, arg) => {
 
 ipcMain.on('requst-mainprocess-kill-program', () => {
   if (currentProcess) {
-    currentProcess.kill();
+    if (isWin) {
+      // There is a bug with .kill in windows where it does not actually kill the process...
+      spawn('taskkill', ['/pid', `${currentProcess.pid}`, '/f', '/t'], { shell: true });
+    } else {
+      currentProcess.kill();
+    }
   }
   setPageLock(false);
 });
@@ -399,5 +478,7 @@ ipcMain.on('request-last-runtime', (event) => {
 });
 
 ipcMain.on('request-mainprocess-check-requirements', () => {
-  checkForMono();
+  if (isMac || isLin) {
+    checkForMono();
+  }
 });

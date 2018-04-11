@@ -248,7 +248,7 @@ class AdvancedOptions extends Component {
         <Divider />
         <AutoComplete
           floatingLabelText="TTY Device"
-          hintText="/dev/usbTTY"
+          hintText={process.platform === 'win32' ? 'COM1' : '/dev/usbTTY'}
           searchText={this.state.ttyPath}
           dataSource={this.state.listTty}
           filter={AutoComplete.caseInsensitiveFilter}

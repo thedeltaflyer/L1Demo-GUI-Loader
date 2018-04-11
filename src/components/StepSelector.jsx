@@ -44,7 +44,7 @@ class StepSelector extends React.Component {
       this.state.devicesAvailable[deviceSelected - 1] : null;
     ipcRenderer.send('mainprocess-set-last-options', {
       filepath: hexPath,
-      tty: selectedDevice ? `/dev/${selectedDevice}` : '',
+      tty: selectedDevice ? `${selectedDevice}` : '',
     });
   }
 
@@ -113,7 +113,7 @@ class StepSelector extends React.Component {
   startProgram() {
     const selectedDevice = this.state.devicesAvailable[this.state.deviceSelected - 1];
     ipcRenderer.send('request-mainprocess-program', {
-      tty: `/dev/${selectedDevice}`,
+      tty: `${selectedDevice}`,
       filepath: this.state.hexPath,
       advanced: false,
     });

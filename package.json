@@ -1,13 +1,21 @@
 {
   "name": "l1demo_gui_loader",
   "productName": "L1Demo GUI Loader",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "description": "A GUI for loading programs onto the LayerOne Demo Board",
   "main": "src/index.js",
   "scripts": {
     "start": "electron-forge start",
     "package": "electron-forge package",
+    "package-win64": "electron-forge package --arch=\"x64\" --platform=\"win32\"",
+    "package-win32": "electron-forge package --arch=\"ia32\" --platform=\"win32\"",
+    "package-mac64": "electron-forge package --arch=\"x64\" --platform=\"darwin\"",
+    "package-linux32": "electron-forge package --arch=\"ia32\" --platform=\"linux\"",
+    "package-linux64": "electron-forge package --arch=\"x64\" --platform=\"linux\"",
     "make": "electron-forge make",
+    "make-mac": "electron-forge make --arch=\"x64,ia32\" --platform=\"darwin\"",
+    "make-win": "electron-forge make --arch=\"x64,ia32\" --platform=\"win32\"",
+    "make-linux": "electron-forge make --arch=\"x64,ia32\" --platform=\"linux\"",
     "publish": "electron-forge publish",
     "lint": "eslint --cache --color --ext .jsx,.js src"
   },
@@ -24,7 +32,8 @@
     "forge": {
       "make_targets": {
         "win32": [
-          "squirrel"
+          "squirrel",
+          "zip"
         ],
         "darwin": [
           "zip"
@@ -45,7 +54,8 @@
         }
       },
       "electronWinstallerConfig": {
-        "name": "l1demo_gui_loader"
+        "name": "l1demo_gui_loader",
+        "icon" : "static/icons/l1demo.ico"
       },
       "electronInstallerDebian": {},
       "electronInstallerRedhat": {},
