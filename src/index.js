@@ -270,7 +270,7 @@ const getUsbTtys = () => {
     Array.prototype.push.apply(ttyFound, getWinUsbComs());
   } else {
     readdirSync('/dev').forEach((ttyPath) => {
-      if (ttyPath.indexOf('tty') >= 0 && ttyPath.indexOf('usb') >= 0) {
+      if (ttyPath.indexOf('tty') >= 0 && (ttyPath.indexOf('usb') >= 0 || ttyPath.indexOf('ACM') >= 0)) {
         ttyFound.push(ttyPath);
       }
     });
